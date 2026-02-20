@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Időpontfoglalás</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <h1>Időpontfoglalás</h1>
+
+  <div id="step1" class="card">
+    <h2>Válassz fodrászt</h2>
+    <div id="hairdressers" class="grid"></div>
+    <p id="step1Error" class="error"></p>
+  </div>
+
+  <div id="step2" class="card" style="display:none;">
+    <button class="back" onclick="backToStep1()">← Vissza</button>
+
+    <h2 id="selectedName"></h2>
+
+    <label class="label">Dátum</label>
+    <input type="date" id="dateInput" onchange="loadFreeTimesForSelectedDate()">
+
+    <h3>Időpontok</h3>
+    <div id="timeSlots" class="slots"></div>
+
+    <div class="form">
+      <input type="text" id="customerName" placeholder="Név">
+      <input type="text" id="customerPhone" placeholder="Telefonszám">
+      <input type="text" id="service" value="Hajvágás">
+      <button class="primary" onclick="bookAppointment()">Lefoglalom</button>
+    </div>
+
+    <p id="error" class="error"></p>
+  </div>
+
+  <div id="step3" class="card" style="display:none;">
+    <h2>Sikeres foglalás ✅</h2>
+    <button class="primary" onclick="backToStep1()">Vissza a fodrászokhoz</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
