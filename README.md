@@ -1,0 +1,2 @@
+# javascript_vizsga_fodraszszalon_idopontfoglalo
+Fodrászszalon időpontfoglaló rendszer - Javascript vizsgafeladat 
