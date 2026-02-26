@@ -1,5 +1,5 @@
 const BASE_URL = "http://salonsapi.prooktatas.hu/api";
-const API_KEY = "vizsga2026kulcs"; 
+const API_KEY = "vizsga2026kulcs";
 
 let hairdressers = [];
 let selectedHairdresser = null;
@@ -61,6 +61,58 @@ function buildHalfHourSlots(startHHMM, endHHMM) {
   return slots;
 }
 
+/** --- ÚJ: telefonszám ellenőrzés --- **/
+function normalizePhone(raw) {
+  // engedélyezett: számok, szóköz, kötőjel, zárójel, plusz
+  // normalizálás: mindent kiszedünk, ami nem szám vagy +
+  let s = String(raw || "").trim();
+
+  // ha van +, csak az elején legyen
+  s = s.replace(/\s+/g, "");
+  if (s.includes("+")) {
+    s = s.replace(/(?!^)\+/g, ""); // a nem-első + jelek törlése
+  }
+
+  // mindent törlünk, ami nem szám vagy +
+  s = s.replace(/[^0-9+]/g, "");
+
+  return s;
+}
+
+function isValidPhone(raw) {
+  const p = normalizePhone(raw);
+
+  // +36XXXXXXXXX (tipik 11-12 hossz, de van aki 10/13)
+  // vagy 06XXXXXXXXX (11)
+  // vagy sima számok nemzetközi nélkül (min 9- max 15)
+  const digitsOnly = p.startsWith("+") ? p.slice(1) : p;
+  if (!/^\d+$/.test(digitsOnly)) return false;
+
+  const len = digitsOnly.length;
+  if (len < 9 || len > 15) return false;
+
+  // ha + van, akkor csak +36... legyen (józan vizsgás szabály)
+  if (p.startsWith("+") && !p.startsWith("+36")) return false;
+
+  // ha 0-val kezdődik, akkor 06-tal kezdődjön
+  if (p.startsWith("0") && !p.startsWith("06")) return false;
+
+  return true;
+}
+
+/** --- ÚJ: dátum+idő -> Date objektum (helyi időzónában) --- **/
+function makeLocalDateTime(dateYMD, timeHHMM) {
+  const [y, m, d] = dateYMD.split("-").map(Number);
+  const [hh, mm] = timeHHMM.split(":").map(Number);
+  return new Date(y, m - 1, d, hh, mm, 0, 0);
+}
+
+/** --- ÚJ: múltbeli időpont tiltás logikához --- **/
+function isPast(dateYMD, timeHHMM) {
+  const dt = makeLocalDateTime(dateYMD, timeHHMM);
+  return dt.getTime() < Date.now();
+}
+
 function renderHairdressers() {
   const container = $("hairdressers");
   container.innerHTML = "";
@@ -69,12 +121,12 @@ function renderHairdressers() {
     const div = document.createElement("div");
     div.className = "hd";
     div.innerHTML = `
-  <strong>${h.name || "Névtelen fodrász"}</strong>
-  <span>${h.description || ""}</span>
-  <div class="bookbtn">
-    <button class="primary" type="button">IDŐPONTFOGLALÁS</button>
-  </div>
-`;
+      <strong>${h.name || "Névtelen fodrász"}</strong>
+      <span>${h.description || ""}</span>
+      <div class="bookbtn">
+        <button class="primary" type="button">IDŐPONTFOGLALÁS</button>
+      </div>
+    `;
     div.onclick = () => selectHairdresser(h);
     container.appendChild(div);
   });
@@ -86,6 +138,8 @@ function selectHairdresser(h) {
   setError("");
 
   $("selectedName").innerText = h.name || "";
+
+  // alapértelmezett a mai nap
   $("dateInput").value = toYMD(new Date());
 
   showStep(2);
@@ -162,7 +216,12 @@ async function loadFreeTimesForSelectedDate() {
       .filter(dt => dt.startsWith(date))
       .map(dt => dt.slice(11, 16));
 
-    const free = allSlots.filter(t => !busyTimes.includes(t));
+    // szabad idők = munkaidő slotok - foglaltak
+    let free = allSlots.filter(t => !busyTimes.includes(t));
+
+    // --- ÚJ: múltbeli idők kiszűrése (mai nap esetén is) ---
+    free = free.filter(t => !isPast(date, t));
+
     renderTimeButtons(free);
   } catch (e) {
     $("timeSlots").innerHTML = "";
@@ -189,14 +248,29 @@ async function bookAppointment() {
     return;
   }
 
+  // --- ÚJ: múltbeli foglalás blokkolása (dupla védelem) ---
+  if (isPast(date, selectedTime)) {
+    setError("Múltbeli időpontra nem lehet foglalni. Válassz későbbi időpontot!");
+    loadFreeTimesForSelectedDate(); // frissítjük is a listát
+    return;
+  }
+
   const name = $("customerName").value.trim();
-  const phone = $("customerPhone").value.trim();
+  const phoneRaw = $("customerPhone").value.trim();
   const service = $("service").value.trim();
 
-  if (!name || !phone || !service) {
+  if (!name || !phoneRaw || !service) {
     setError("Minden mező kitöltése kötelező!");
     return;
   }
+
+  // --- ÚJ: telefonszám validáció ---
+  if (!isValidPhone(phoneRaw)) {
+    setError("Érvénytelen telefonszám! Példa: 06301234567 vagy +36301234567");
+    return;
+  }
+
+  const phone = normalizePhone(phoneRaw);
 
   const payload = {
     hairdresser_id: Number(selectedHairdresser.id),
